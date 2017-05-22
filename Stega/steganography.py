@@ -7,13 +7,16 @@ from collections import defaultdict, OrderedDict
 import json
 import string
 
+DEFAULT_BYTE = 255
+
+LAST_DIRTY_X_VAL = 399
+
 DIRTY_X_VAL = 293
 
 DIRTY_Y_VAL = 25
 
 default_pixel = list((255, 255, 255, 0))
 FLAG = "flag{cant_you_see_hiding_in_plain_sight}"
-
 
 def do2(image_size, loaded_image, secret_string, rand1, rand2, x_factor):
     print "i, p, s, w1, w2, x", image_size, loaded_image, secret_string, rand1, rand2, x_factor
@@ -65,9 +68,6 @@ def guess(vector, b_factor, x_factor, key_range_min=0x20, key_range_max=0x7e):
         if vector == predicate_vector:
             return key
 
-            # import string
-            # if key in string.printable:
-            #     return key
 
 
 def test_encoding(pixel_tuple, encoder):
@@ -117,6 +117,52 @@ def rev_do2(image_size, loaded_image, flag, x_factor=97):
     return good
 
 
+def pixel_taker(loaded_image, y, x_min, x_max):
+    pixels = []
+    for x in range(x_min, x_max+1):
+        pixel_tuple_dirty = list(loaded_image[x, y])
+        for p in pixel_tuple_dirty[:-1]:
+            pixels.append(p)
+    return pixels
+
+def guess_char(guess, loaded_image, x_factor=97, offset=0):
+    guess = ord(guess)
+    flat_pixels = pixel_taker(loaded_image, DIRTY_Y_VAL, DIRTY_X_VAL, LAST_DIRTY_X_VAL)[offset:]
+    counter = 0
+    vector = xor(guess, x_factor)
+    # print vector
+    while counter < 8:
+        # print "counter", counter
+        # print counter, guess
+        pred = vector[counter]
+        # print "pred", pred
+        current_byte = flat_pixels[counter]
+        # print "current byte", current_byte
+        # original_byte = current_byte + 1 if not pred else current_byte -1
+        if current_byte == 254 and pred:
+            # "bad char", chr(guess)
+            return False
+        elif current_byte == DEFAULT_BYTE and not pred:
+            # "bad char", chr(guess)
+            return False
+        if counter == 7:
+            # print "good char!", chr(guess)
+            return True
+        counter += 1
+        # print
+
+
+def infer_key(loaded_image):
+    x_factor = 97
+    offset = 0
+    while True:
+        for c in [chr(i) for i in range(20, 0x7e)]:
+            guess = guess_char(c, loaded_image, x_factor=x_factor, offset=offset)
+            if guess:
+                print c,
+                offset += 8
+                x_factor += 1
+                break
 
 
 def mb(*args):
@@ -178,9 +224,62 @@ def create_flag(flag=""):
     print flag
     return create_flag(flag)
 
+
+def xfactor_calc():
+    def inner():
+        for x_factor in range(97, 0x7e):
+            array = []
+            for b in range(8):
+                array.append(((x_factor * (2 ** b)) & 0xFF) >> 7)
+            yield x_factor, array
+    return list(inner())
+
+def xor(a, b):
+    binary = bin(a ^ b)[2:]
+    return [bool(int(x)) for x in "0" * (8-len(binary)) + binary]
+
+
+def key_calc():
+    def inner():
+        for secret_char in [chr(i) for i in range(97, 0x7e)]:
+            array = []
+            for b in range(8):
+                array.append(((ord(secret_char) << b) & 0xFF) >> 7 )
+            yield secret_char, array
+    return list(inner())
+
+
 if __name__ == "__main__":
     image = Image.open('secret.png')
     loaded = image.load()
+    # print guess_char("a", loaded)
+    # quit()
+    infer_key(loaded)
+    quit()
+    for c in [chr(i) for i in range(20, 0x7e)]:
+        if guess_char(c, loaded):
+            print c, guess_char(c, loaded)
+    quit()
+
+    pixels = pixel_taker(loaded, 25, 293, 399)
+    while pixels:
+        print [pixels.pop(0) for _ in range(3)]
+    quit()
+
+    print xor(97, 0)
+    # quit()
+
+    print vals
+    for x, y in vals:
+        print x, int("".join([str(i) for i in y]),2)
+    print "CHARS"
+
+    vals = key_calc()
+    print vals
+    for x, y in vals:
+        print ord(x), int("".join([str(i) for i in y]), 2)
+
+    quit()
     # print rev_do2(image.size, loaded, flag=FLAG)
     # quit()
     print rev_do2(image.size, loaded, FLAG)
